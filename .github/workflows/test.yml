@@ -214,8 +214,9 @@ jobs:
           fi
           
           # Test image suffix with overrides
-          if [[ "${{ steps.init-overrides.outputs.image_suffix }}" != "-main" ]]; then
-            echo "❌ Expected image_suffix '-main' with master_branch_override='develop', got '${{ steps.init-overrides.outputs.image_suffix }}'"
+          # When environment is overridden, image suffix should match the environment name
+          if [[ "${{ steps.init-overrides.outputs.image_suffix }}" != "-staging" ]]; then
+            echo "❌ Expected image_suffix '-staging' with environment_name_override='staging', got '${{ steps.init-overrides.outputs.image_suffix }}'"
             exit 1
           fi
           
