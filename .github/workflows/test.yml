@@ -1,0 +1,58 @@
+name: Test Quant Cloud Init Action
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - '.github/workflows/test.yml'
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build with ncc
+        run: npx ncc build src/index.ts
+
+      - name: Debug Action Files
+        run: |
+          ls -la
+          ls -la dist/
+          cat action.yml
+
+      - name: Test Quant Cloud Init Action
+        uses: ./
+        id: init
+        with:
+          quant_api_key: ${{ secrets.QUANT_API_KEY }}
+          quant_organization: 'quant'
+          base_url: 'https://portal.stage.quantcdn.io/api/v3'
+
+      - name: Debug Outputs
+        run: |
+          echo "Project exists: ${{ steps.init.outputs.project_exists }}"
+          echo "Environment exists: ${{ steps.init.outputs.environment_exists }}"
+          echo "Application: ${{ steps.init.outputs.quant_application }}"
+          echo "Environment: ${{ steps.init.outputs.environment_name }}"
+          echo "Is production: ${{ steps.init.outputs.is_production }}"
+          echo "Stripped endpoint: ${{ steps.init.outputs.stripped_endpoint }}"
+
+      - name: Verify Docker Login
+        run: |
+          echo "Testing if Docker is logged into the registry..."
+          docker info
+          echo "✅ Docker login verification completed" 

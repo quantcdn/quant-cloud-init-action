@@ -1,0 +1,68 @@
+name: Example Quant Cloud Deployment (Simplified!)
+on:
+  push:
+    branches: [main, develop, feature/*]
+    tags: ['*']
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Initialize Quant Cloud (includes Docker login!)
+        uses: your-org/quant-cloud-init-action@v1
+        id: init
+        with:
+          quant_organization: ${{ secrets.QUANT_ORGANIZATION }}
+          quant_api_key: ${{ secrets.QUANT_API_KEY }}
+          # Optional overrides:
+          # quant_application: my-custom-app
+          # master_branch_override: main
+          # environment_name_override: staging
+          
+      # No Docker login step needed - it's handled automatically!
+      
+      - name: Build and push CLI image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./.docker/Dockerfile.cli
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.init.outputs.stripped_endpoint }}/${{ secrets.QUANT_ORGANIZATION }}/${{ steps.init.outputs.quant_application }}:cli-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          
+      - name: Build and push PHP image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./.docker/Dockerfile.php
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.init.outputs.stripped_endpoint }}/${{ secrets.QUANT_ORGANIZATION }}/${{ steps.init.outputs.quant_application }}:php-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          
+      - name: Redeploy environment (if not feature branch)
+        if: steps.init.outputs.environment_name != 'feature'
+        uses: quantcdn/quant-cloud-environment-state-action@v1
+        with:
+          api_key: ${{ secrets.QUANT_API_KEY }}
+          organization: ${{ secrets.QUANT_ORGANIZATION }}
+          application: ${{ steps.init.outputs.quant_application }}
+          environment: ${{ steps.init.outputs.environment_name }}
+          action: redeploy
+          
+      - name: Show deployment summary
+        run: |
+          echo "🎉 Deployment completed successfully!"
+          echo "Application: ${{ steps.init.outputs.quant_application }}"
+          echo "Environment: ${{ steps.init.outputs.environment_name }}"
+          echo "Production: ${{ steps.init.outputs.is_production }}"
+          echo "Registry Endpoint: ${{ steps.init.outputs.stripped_endpoint }}"
+          echo "✅ Docker was automatically logged in during initialization!" 

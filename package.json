@@ -1,0 +1,22 @@
+{
+  "name": "quant-cloud-init-action",
+  "version": "1.0.0",
+  "description": "GitHub Action for initializing Quant Cloud deployments with environment detection, Quant Cloud Image Registry setup, and validation",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "ncc build src/index.ts",
+    "test": "jest",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@actions/core": "^1.10.0",
+    "@actions/exec": "^1.1.1",
+    "quant-ts-client": "github:quantcdn/quant-ts-client#v3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vercel/ncc": "^0.38.3",
+    "husky": "^9.1.7",
+    "typescript": "^5.0.0"
+  }
+}

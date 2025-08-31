@@ -1,0 +1,40 @@
+name: 'Quant Cloud Init'
+description: 'Initialize Quant Cloud deployments with environment detection, Quant Cloud Image Registry setup, validation, and Docker login'
+branding:
+  icon: 'cloud'
+  color: 'blue'
+inputs:
+  quant_organization:
+    description: 'Quant Cloud organisation name'
+    required: true
+  quant_application:
+    description: 'Quant Cloud application name (optional, defaults to repository name)'
+    required: false
+  quant_api_key:
+    description: 'Quant Cloud API key'
+    required: true
+  master_branch_override:
+    description: 'Override for master branch name (defaults to "main" or "master")'
+    required: false
+  environment_name_override:
+    description: 'Override for environment name (optional)'
+    required: false
+  base_url:
+    description: 'Quant Cloud API base URL'
+    required: false
+outputs:
+  project_exists:
+    description: 'Whether the project exists in Quant Cloud'
+  environment_exists:
+    description: 'Whether the environment exists in Quant Cloud'
+  quant_application:
+    description: 'The determined application name'
+  environment_name:
+    description: 'The determined environment name'
+  is_production:
+    description: 'Whether this is a production environment'
+  stripped_endpoint:
+    description: 'Quant Cloud Image Registry endpoint without protocol (for Docker tags)'
+runs:
+  using: 'node20'
+  main: 'dist/index.js' 

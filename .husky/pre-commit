@@ -1,0 +1,18 @@
+# Skip if this is a dist update commit
+if git log -1 --pretty=%B | grep -q "chore: update dist"; then
+  echo "⏭️ Skipping pre-commit for dist update"
+  exit 0
+fi
+
+echo "🔨 Running build..."
+npm run build
+
+echo "📦 Staging dist..."
+git add dist/
+
+# Check if dist directory has changes
+if git diff --cached --name-only | grep -q "^dist/"; then
+  echo "✅ Changes detected in dist/, committing..."
+else
+  echo "ℹ️ No changes in dist/, skipping commit."
+fi
