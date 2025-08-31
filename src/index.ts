@@ -37,13 +37,34 @@ function isTag(ref: string): boolean {
 }
 
 /**
+ * Determine if the current ref is a pull request
+ */
+function isPullRequest(ref: string): boolean {
+    return ref.startsWith('refs/pull/');
+}
+
+/**
+ * Extract pull request ID from ref
+ */
+function extractPullRequestId(ref: string): string | null {
+    if (ref.startsWith('refs/pull/')) {
+        // refs/pull/123/merge -> 123
+        const match = ref.match(/^refs\/pull\/(\d+)\//);
+        return match ? match[1] : null;
+    }
+    return null;
+}
+
+/**
  * Generate environment name based on branch and overrides
  */
 function generateEnvironmentName(
     branch: string, 
     environmentNameOverride?: string,
     masterBranchOverride?: string,
-    isTagRef: boolean = false
+    isTagRef: boolean = false,
+    isPrRef: boolean = false,
+    prId?: string | null
 ): string {
     if (environmentNameOverride) {
         return environmentNameOverride;
@@ -54,26 +75,42 @@ function generateEnvironmentName(
         return 'production';
     }
 
+    // Pull requests get unique PR environments
+    if (isPrRef && prId) {
+        return `pr-${prId}`;
+    }
+
     if (isProductionBranch(branch, masterBranchOverride)) {
         return 'production';
     } else if (branch === 'develop') {
         return 'develop';
     } else if (branch.startsWith('feature/')) {
         // For feature branches, use the full branch name to create unique environments
-        return branch.replace(/[^a-zA-Z0-9.-]/g, '-').toLowerCase();
+        return branch.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
     } else {
         // For other branches, use the branch name
-        return branch.replace(/[^a-zA-Z0-9.-]/g, '-').toLowerCase();
+        return branch.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
     }
 }
 
 /**
  * Generate image tag suffix based on branch
  */
-function generateImageSuffix(branch: string, masterBranchOverride?: string, isTagRef: boolean = false): string {
+function generateImageSuffix(
+    branch: string, 
+    masterBranchOverride?: string, 
+    isTagRef: boolean = false,
+    isPrRef: boolean = false,
+    prId?: string | null
+): string {
     // Tags get their tag name as suffix
     if (isTagRef) {
         return `-${branch}`;
+    }
+    
+    // Pull requests get unique PR suffixes
+    if (isPrRef && prId) {
+        return `-pr-${prId}`;
     }
     
     if (isProductionBranch(branch, masterBranchOverride)) {
@@ -81,10 +118,10 @@ function generateImageSuffix(branch: string, masterBranchOverride?: string, isTa
     } else if (branch === 'develop') {
         return '-develop';
     } else if (branch.startsWith('feature/')) {
-        const safeBranchName = branch.replace(/[^a-zA-Z0-9.-]/g, '-').toLowerCase();
+        const safeBranchName = branch.replace(/[^a-zA-Z0-9.]/g, '-').toLowerCase();
         return `-${safeBranchName}`;
     } else {
-        const safeBranchName = branch.replace(/[^a-zA-Z0-9.-]/g, '-').toLowerCase();
+        const safeBranchName = branch.replace(/[^a-zA-Z0-9.]/g, '-').toLowerCase();
         return `-${safeBranchName}`;
     }
 }
@@ -148,13 +185,25 @@ async function run() {
         return;
     }
 
-    // Determine branch or tag
+    // Determine branch, tag, or pull request
     let branch: string;
     let isTag = false;
+    let isPr = false;
+    let prId: string | null = null;
     
     if (githubRef.startsWith('refs/tags/')) {
         branch = githubRef.replace('refs/tags/', '');
         isTag = true;
+    } else if (githubRef.startsWith('refs/pull/')) {
+        // For pull requests, extract the PR ID and use a placeholder branch name
+        prId = extractPullRequestId(githubRef);
+        if (!prId) {
+            core.setFailed(`Could not extract pull request ID from ref: ${githubRef}`);
+            return;
+        }
+        branch = `pr-${prId}`;
+        isPr = true;
+        core.info(`Detected pull request #${prId}`);
     } else if (githubRef.startsWith('refs/heads/')) {
         branch = githubRef.replace('refs/heads/', '');
     } else {
@@ -186,18 +235,19 @@ async function run() {
         core.info(`Using branch-based production detection: ${isProduction}`);
     }
     
-    const environmentName = generateEnvironmentName(branch, environmentNameOverride, masterBranchOverride, isTag);
+    const environmentName = generateEnvironmentName(branch, environmentNameOverride, masterBranchOverride, isTag, isPr, prId);
     
     // Generate image suffix - if environment is overridden, use it for the suffix
     let imageSuffix: string;
     if (environmentNameOverride) {
         // When environment is overridden, generate suffix based on the environment name
-        const safeEnvName = environmentNameOverride.replace(/[^a-zA-Z0-9.-]/g, '-').toLowerCase();
+        // Environment names must be Quant Cloud compliant (no dots), but image suffixes can have dots
+        const safeEnvName = environmentNameOverride.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
         imageSuffix = `-${safeEnvName}`;
         core.info(`Environment overridden, generating image suffix from environment name: ${imageSuffix}`);
     } else {
         // Use normal branch-based suffix generation
-        imageSuffix = generateImageSuffix(branch, masterBranchOverride, isTag);
+        imageSuffix = generateImageSuffix(branch, masterBranchOverride, isTag, isPr, prId);
         core.info(`Using branch-based image suffix generation: ${imageSuffix}`);
     }
     

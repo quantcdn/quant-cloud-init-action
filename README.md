@@ -43,6 +43,7 @@ The `image_suffix` output provides the appropriate tag suffix for Docker images 
 - **main/master branches**: `-latest` (e.g., `myapp:latest`)
 - **develop branch**: `-develop` (e.g., `myapp:develop`)  
 - **feature branches**: `-{branch-name}` (e.g., `myapp:feature-new-feature`)
+- **pull requests**: `-pr-{id}` (e.g., `myapp:pr-123`)
 - **tags**: `-tag-name` (e.g., `myapp:v1.0.0`)
 
 ### Usage Example
@@ -55,7 +56,7 @@ The `image_suffix` output provides the appropriate tag suffix for Docker images 
     tags: ${{ steps.init.outputs.stripped_endpoint }}/${{ secrets.QUANT_ORGANIZATION }}/${{ steps.init.outputs.quant_application }}${{ steps.init.outputs.image_suffix }}
 ```
 
-This automatically creates the correct image tag based on your current branch or tag!
+This automatically creates the correct image tag based on your current branch or tag.
 
 ## Environment Detection Logic
 
@@ -64,8 +65,13 @@ The action automatically determines the environment based on the current branch:
 - **main/master branches**: `production` environment with `-latest` image suffix
 - **develop branch**: `develop` environment with `-develop` image suffix  
 - **feature branches**: `{branch-name}` environment with `-{branch-name}` image suffix
+- **pull requests**: `pr-{id}` environment with `-pr-{id}` image suffix
 - **tags**: `production` environment with `-{tag-name}` image suffix
 - **other branches**: `{branch-name}` environment with `-{branch-name}` image suffix
+
+> **Note**: All environment names are automatically sanitized to comply with Quant Cloud requirements (lowercase alphanumeric characters and hyphens only). Special characters like dots, slashes, and underscores are converted to hyphens.
+
+
 
 ## Usage
 
@@ -127,7 +133,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         
-      - name: Initialize Quant Cloud (includes Docker login!)
+      - name: Initialize Quant Cloud
         uses: your-org/quant-cloud-init-action@v1
         id: init
         with:
@@ -167,7 +173,7 @@ jobs:
           
       - name: Show deployment summary
         run: |
-          echo "🎉 Deployment completed successfully!"
+          echo "🎉 Deployment completed successfully."
           echo "Application: ${{ steps.init.outputs.quant_application }}"
           echo "Environment: ${{ steps.init.outputs.environment_name }}"
           echo "Production: ${{ steps.init.outputs.is_production }}"
