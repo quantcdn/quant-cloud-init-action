@@ -63596,9 +63596,32 @@ async function run() {
         core.info(`Using repository name as application name: ${applicationName}`);
     }
     // Determine environment and production status
-    const isProduction = isProductionBranch(branch, masterBranchOverride) || isTag;
+    // If environment is overridden, don't use branch-based production detection
+    let isProduction;
+    if (environmentNameOverride) {
+        // When environment is overridden, only consider tags as production
+        isProduction = isTag;
+        core.info(`Environment overridden to '${environmentNameOverride}', production status based on tag only: ${isProduction}`);
+    }
+    else {
+        // Use normal branch-based production detection
+        isProduction = isProductionBranch(branch, masterBranchOverride) || isTag;
+        core.info(`Using branch-based production detection: ${isProduction}`);
+    }
     const environmentName = generateEnvironmentName(branch, environmentNameOverride, masterBranchOverride, isTag);
-    const imageSuffix = generateImageSuffix(branch, masterBranchOverride, isTag);
+    // Generate image suffix - if environment is overridden, use it for the suffix
+    let imageSuffix;
+    if (environmentNameOverride) {
+        // When environment is overridden, generate suffix based on the environment name
+        const safeEnvName = environmentNameOverride.replace(/[^a-zA-Z0-9.-]/g, '-').toLowerCase();
+        imageSuffix = `-${safeEnvName}`;
+        core.info(`Environment overridden, generating image suffix from environment name: ${imageSuffix}`);
+    }
+    else {
+        // Use normal branch-based suffix generation
+        imageSuffix = generateImageSuffix(branch, masterBranchOverride, isTag);
+        core.info(`Using branch-based image suffix generation: ${imageSuffix}`);
+    }
     // For tags, we need to extract the tag name from the ref
     const tagName = isTag ? branch : null;
     core.info(`Branch: ${branch}`);
