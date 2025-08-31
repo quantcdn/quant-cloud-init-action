@@ -179,23 +179,49 @@ async function run() {
     try {
         core.info(`Validating organization and API key for ${organization}...`);
         
+        // First, check if the organization exists by trying to list applications
+        try {
+            core.info(`Checking if organization '${organization}' exists...`);
+            const applications = await applicationsClient.listApplications(organization);
+            core.info(`✅ Organization '${organization}' exists and is accessible`);
+        } catch (orgError) {
+            const errorMessage = orgError instanceof Error ? orgError.message : 'Unknown error';
+            core.setFailed(`Organization '${organization}' does not exist or is not accessible: ${errorMessage}`);
+            return;
+        }
+        
         // Try to get Quant Cloud Image Registry credentials as a validation step
+        core.info(`Attempting to get registry credentials for organization: ${organization}`);
         const registryToken = await applicationsClient.getEcrLoginCredentials(organization);
         
         if (registryToken.body && registryToken.body.password) {
-            projectExists = true;
-            core.info('✅ Organization and API key validation successful');
+            core.info('✅ Registry credentials retrieved successfully');
+            core.info(`Registry endpoint: ${registryToken.body.endpoint}`);
         } else {
             core.setFailed('No Quant Cloud Image Registry credentials found - organization may not exist or API key may be invalid');
             return;
+        }
+
+        // Now check if the specific application exists
+        try {
+            core.info(`Checking if application '${applicationName}' exists in organization '${organization}'...`);
+            const application = await applicationsClient.getApplication(organization, applicationName);
+            projectExists = true;
+            core.info(`✅ Application '${applicationName}' exists in Quant Cloud`);
+        } catch (appError) {
+            const errorMessage = appError instanceof Error ? appError.message : 'Unknown error';
+            core.warning(`Application '${applicationName}' does not exist yet in Quant Cloud - this is normal for new projects`);
+            core.info(`You can create this application in the Quant Cloud dashboard or it will be created automatically on first deployment`);
+            projectExists = false;
         }
 
         // Check if environment exists (optional - won't fail if it doesn't)
         try {
             // This would need to be implemented based on your Quant Cloud API
             // For now, we'll assume it exists if we can get registry credentials
+            // Note: This is a simplified check - in reality, you'd want to validate against actual environments
             environmentExists = true;
-            core.info(`✅ Environment ${environmentName} validation successful`);
+            core.info(`✅ Environment ${environmentName} validation successful (simplified check)`);
         } catch (envError) {
             core.warning(`Environment ${environmentName} may not exist yet - this is normal for new projects`);
             environmentExists = false;

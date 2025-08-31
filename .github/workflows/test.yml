@@ -14,6 +14,16 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test-scenario: [
+          'valid-credentials',
+          'invalid-api-key',
+          'invalid-organization',
+          'non-existent-application',
+          'feature-branch',
+          'tag-deployment'
+        ]
     steps:
       - uses: actions/checkout@v4
 
@@ -34,25 +44,181 @@ jobs:
           ls -la dist/
           cat action.yml
 
-      - name: Test Quant Cloud Init Action
+      - name: Test Valid Credentials
+        if: matrix.test-scenario == 'valid-credentials'
         uses: ./
-        id: init
+        id: init-valid
         with:
           quant_api_key: ${{ secrets.QUANT_API_KEY }}
           quant_organization: 'quant'
           base_url: 'https://portal.stage.quantcdn.io/api/v3'
+        continue-on-error: false
 
-      - name: Debug Outputs
-        run: |
-          echo "Project exists: ${{ steps.init.outputs.project_exists }}"
-          echo "Environment exists: ${{ steps.init.outputs.environment_exists }}"
-          echo "Application: ${{ steps.init.outputs.quant_application }}"
-          echo "Environment: ${{ steps.init.outputs.environment_name }}"
-          echo "Is production: ${{ steps.init.outputs.is_production }}"
-          echo "Stripped endpoint: ${{ steps.init.outputs.stripped_endpoint }}"
+      - name: Test Invalid API Key (Expected Failure)
+        if: matrix.test-scenario == 'invalid-api-key'
+        uses: ./
+        id: init-invalid-key
+        with:
+          quant_api_key: 'invalid-key-12345'
+          quant_organization: 'quant'
+          base_url: 'https://portal.stage.quantcdn.io/api/v3'
+        continue-on-error: true
 
-      - name: Verify Docker Login
+      - name: Test Invalid Organization (Expected Failure)
+        if: matrix.test-scenario == 'invalid-organization'
+        uses: ./
+        id: init-invalid-org
+        with:
+          quant_api_key: ${{ secrets.QUANT_API_KEY }}
+          quant_organization: 'non-existent-org-12345'
+          base_url: 'https://portal.stage.quantcdn.io/api/v3'
+        continue-on-error: true
+
+      - name: Test Non-Existent Application (Expected Warning)
+        if: matrix.test-scenario == 'non-existent-application'
+        uses: ./
+        id: init-no-app
+        with:
+          quant_api_key: ${{ secrets.QUANT_API_KEY }}
+          quant_organization: 'quant'
+          quant_application: 'non-existent-app-12345'
+          base_url: 'https://portal.stage.quantcdn.io/api/v3'
+        continue-on-error: false
+
+      - name: Test Feature Branch Detection
+        if: matrix.test-scenario == 'feature-branch'
+        uses: ./
+        id: init-feature
+        with:
+          quant_api_key: ${{ secrets.QUANT_API_KEY }}
+          quant_organization: 'quant'
+          base_url: 'https://portal.stage.quantcdn.io/api/v3'
+        env:
+          GITHUB_REF: 'refs/heads/feature/test-branch'
+          GITHUB_REPOSITORY: 'quant/test-repo'
+        continue-on-error: false
+
+      - name: Test Tag Deployment Detection
+        if: matrix.test-scenario == 'tag-deployment'
+        uses: ./
+        id: init-tag
+        with:
+          quant_api_key: ${{ secrets.QUANT_API_KEY }}
+          quant_organization: 'quant'
+          base_url: 'https://portal.stage.quantcdn.io/api/v3'
+        env:
+          GITHUB_REF: 'refs/tags/v1.0.0'
+          GITHUB_REPOSITORY: 'quant/test-repo'
+        continue-on-error: false
+
+      - name: Validate Valid Credentials Outputs
+        if: matrix.test-scenario == 'valid-credentials'
         run: |
-          echo "Testing if Docker is logged into the registry..."
-          docker info
-          echo "✅ Docker login verification completed" 
+          echo "=== VALID CREDENTIALS TEST RESULTS ==="
+          echo "Project exists: ${{ steps.init-valid.outputs.project_exists }}"
+          echo "Environment exists: ${{ steps.init-valid.outputs.environment_exists }}"
+          echo "Application: ${{ steps.init-valid.outputs.quant_application }}"
+          echo "Environment: ${{ steps.init-valid.outputs.environment_name }}"
+          echo "Is production: ${{ steps.init-valid.outputs.is_production }}"
+          echo "Stripped endpoint: ${{ steps.init-valid.outputs.stripped_endpoint }}"
+          
+          # Validate expected values
+          if [[ "${{ steps.init-valid.outputs.environment_name }}" != "production" ]]; then
+            echo "❌ Expected environment 'production', got '${{ steps.init-valid.outputs.environment_name }}'"
+            exit 1
+          fi
+          if [[ "${{ steps.init-valid.outputs.is_production }}" != "true" ]]; then
+            echo "❌ Expected is_production 'true', got '${{ steps.init-valid.outputs.is_production }}'"
+            exit 1
+          fi
+          echo "✅ Valid credentials test passed"
+
+      - name: Validate Invalid API Key Failure
+        if: matrix.test-scenario == 'invalid-api-key'
+        run: |
+          echo "=== INVALID API KEY TEST RESULTS ==="
+          if [[ "${{ steps.init-invalid-key.outcome }}" == "failure" ]]; then
+            echo "✅ Invalid API key correctly failed as expected"
+          else
+            echo "❌ Invalid API key should have failed but didn't"
+            exit 1
+          fi
+
+      - name: Validate Invalid Organization Failure
+        if: matrix.test-scenario == 'invalid-organization'
+        run: |
+          echo "=== INVALID ORGANIZATION TEST RESULTS ==="
+          if [[ "${{ steps.init-invalid-org.outcome }}" == "failure" ]]; then
+            echo "✅ Invalid organization correctly failed as expected"
+          else
+            echo "❌ Invalid organization should have failed but didn't"
+            exit 1
+          fi
+
+      - name: Validate Non-Existent Application Warning
+        if: matrix.test-scenario == 'non-existent-application'
+        run: |
+          echo "=== NON-EXISTENT APPLICATION TEST RESULTS ==="
+          echo "Project exists: ${{ steps.init-no-app.outputs.project_exists }}"
+          echo "Application: ${{ steps.init-no-app.outputs.quant_application }}"
+          
+          if [[ "${{ steps.init-no-app.outputs.project_exists }}" == "false" ]]; then
+            echo "✅ Non-existent application correctly identified as not existing"
+          else
+            echo "❌ Non-existent application should show project_exists=false"
+            exit 1
+          fi
+          if [[ "${{ steps.init-no-app.outputs.quant_application }}" == "non-existent-app-12345" ]]; then
+            echo "✅ Application name correctly set to provided value"
+          else
+            echo "❌ Application name should match provided value"
+            exit 1
+          fi
+          echo "✅ Non-existent application test passed"
+
+      - name: Validate Feature Branch Detection
+        if: matrix.test-scenario == 'feature-branch'
+        run: |
+          echo "=== FEATURE BRANCH TEST RESULTS ==="
+          echo "Environment: ${{ steps.init-feature.outputs.environment_name }}"
+          echo "Is production: ${{ steps.init-feature.outputs.is_production }}"
+          
+          if [[ "${{ steps.init-feature.outputs.environment_name }}" != "feature" ]]; then
+            echo "❌ Expected environment 'feature', got '${{ steps.init-feature.outputs.environment_name }}'"
+            exit 1
+          fi
+          if [[ "${{ steps.init-feature.outputs.is_production }}" != "false" ]]; then
+            echo "❌ Expected is_production 'false', got '${{ steps.init-feature.outputs.is_production }}'"
+            exit 1
+          fi
+          echo "✅ Feature branch detection test passed"
+
+      - name: Validate Tag Deployment Detection
+        if: matrix.test-scenario == 'tag-deployment'
+        run: |
+          echo "=== TAG DEPLOYMENT TEST RESULTS ==="
+          echo "Environment: ${{ steps.init-tag.outputs.environment_name }}"
+          echo "Is production: ${{ steps.init-tag.outputs.is_production }}"
+          
+          if [[ "${{ steps.init-tag.outputs.environment_name }}" != "production" ]]; then
+            echo "❌ Expected environment 'production', got '${{ steps.init-tag.outputs.environment_name }}'"
+            exit 1
+          fi
+          if [[ "${{ steps.init-tag.outputs.is_production }}" != "true" ]]; then
+            echo "❌ Expected is_production 'true', got '${{ steps.init-tag.outputs.is_production }}'"
+            exit 1
+          fi
+          echo "✅ Tag deployment detection test passed"
+
+      - name: Test Summary
+        run: |
+          echo "=== TEST SUMMARY ==="
+          echo "Test scenario: ${{ matrix.test-scenario }}"
+          echo "Job status: ${{ job.status }}"
+          echo "Step outcomes:"
+          echo "  - Valid credentials: ${{ steps.init-valid.outcome || 'N/A' }}"
+          echo "  - Invalid API key: ${{ steps.init-invalid-key.outcome || 'N/A' }}"
+          echo "  - Invalid org: ${{ steps.init-invalid-org.outcome || 'N/A' }}"
+          echo "  - Non-existent app: ${{ steps.init-no-app.outcome || 'N/A' }}"
+          echo "  - Feature branch: ${{ steps.init-feature.outcome || 'N/A' }}"
+          echo "  - Tag deployment: ${{ steps.init-tag.outcome || 'N/A' }}" 

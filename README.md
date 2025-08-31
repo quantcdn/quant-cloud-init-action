@@ -6,7 +6,7 @@ A GitHub Action for initializing Quant Cloud deployments with environment detect
 
 - **Automatic Environment Detection**: Automatically determines environment names based on branch names
 - **Registry Authentication**: Handles Quant Cloud Image Registry login and **automatically logs into Docker registry**
-- **Project Validation**: Validates organization and API key before proceeding
+- **Comprehensive Validation**: Validates organization, API key, and application existence in Quant Cloud
 - **Smart Branch Handling**: Supports main/master, develop, feature branches, and tags
 - **Flexible Configuration**: Allows overrides for application names, master branches, and environment names
 - **Seamless Integration**: No need for separate Docker login steps in your workflow
