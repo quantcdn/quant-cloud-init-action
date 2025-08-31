@@ -63464,11 +63464,21 @@ function isProductionBranch(branch, masterBranchOverride) {
     return productionBranches.includes(branch);
 }
 /**
+ * Determine if the current ref is a tag
+ */
+function isTag(ref) {
+    return ref.startsWith('refs/tags/');
+}
+/**
  * Generate environment name based on branch and overrides
  */
-function generateEnvironmentName(branch, environmentNameOverride, masterBranchOverride) {
+function generateEnvironmentName(branch, environmentNameOverride, masterBranchOverride, isTagRef = false) {
     if (environmentNameOverride) {
         return environmentNameOverride;
+    }
+    // Tags are always production
+    if (isTagRef) {
+        return 'production';
     }
     if (isProductionBranch(branch, masterBranchOverride)) {
         return 'production';
@@ -63477,7 +63487,8 @@ function generateEnvironmentName(branch, environmentNameOverride, masterBranchOv
         return 'develop';
     }
     else if (branch.startsWith('feature/')) {
-        return 'feature';
+        // For feature branches, use the full branch name to create unique environments
+        return branch.replace(/[^a-zA-Z0-9.-]/g, '-').toLowerCase();
     }
     else {
         // For other branches, use the branch name
@@ -63487,7 +63498,11 @@ function generateEnvironmentName(branch, environmentNameOverride, masterBranchOv
 /**
  * Generate image tag suffix based on branch
  */
-function generateImageSuffix(branch, masterBranchOverride) {
+function generateImageSuffix(branch, masterBranchOverride, isTagRef = false) {
+    // Tags get their tag name as suffix
+    if (isTagRef) {
+        return `-${branch}`;
+    }
     if (isProductionBranch(branch, masterBranchOverride)) {
         return '-latest';
     }
@@ -63581,11 +63596,16 @@ async function run() {
         core.info(`Using repository name as application name: ${applicationName}`);
     }
     // Determine environment and production status
-    const isProduction = isProductionBranch(branch, masterBranchOverride);
-    const environmentName = generateEnvironmentName(branch, environmentNameOverride, masterBranchOverride);
-    const imageSuffix = generateImageSuffix(branch, masterBranchOverride);
+    const isProduction = isProductionBranch(branch, masterBranchOverride) || isTag;
+    const environmentName = generateEnvironmentName(branch, environmentNameOverride, masterBranchOverride, isTag);
+    const imageSuffix = generateImageSuffix(branch, masterBranchOverride, isTag);
+    // For tags, we need to extract the tag name from the ref
+    const tagName = isTag ? branch : null;
     core.info(`Branch: ${branch}`);
     core.info(`Is tag: ${isTag}`);
+    if (isTag) {
+        core.info(`Tag name: ${tagName}`);
+    }
     core.info(`Environment: ${environmentName}`);
     core.info(`Is production: ${isProduction}`);
     core.info(`Image suffix: ${imageSuffix}`);
@@ -63696,6 +63716,7 @@ async function run() {
         core.setOutput('environment_name', environmentName);
         core.setOutput('is_production', isProduction.toString());
         core.setOutput('stripped_endpoint', strippedEndpoint);
+        core.setOutput('image_suffix', imageSuffix);
         // Log summary
         core.info('🎉 Quant Cloud initialization completed successfully!');
         core.info(`Application: ${applicationName}`);

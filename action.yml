@@ -35,6 +35,8 @@ outputs:
     description: 'Whether this is a production environment'
   stripped_endpoint:
     description: 'Quant Cloud Image Registry endpoint without protocol (for Docker tags)'
+  image_suffix:
+    description: 'The determined image tag suffix (e.g., -latest, -develop, -v1.0.0)'
 runs:
   using: 'node20'
   main: 'dist/index.js' 

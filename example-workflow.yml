@@ -26,6 +26,11 @@ jobs:
           
       # No Docker login step needed - it's handled automatically!
       
+      # Build and push images with automatic tag suffixes
+      # - main/master branches: -latest
+      # - develop branch: -develop  
+      # - feature branches: -{branch-name} (e.g., -feature-my-big-feature)
+      # - tags: -{tag-name} (e.g., -v1.0.0)
       - name: Build and push CLI image
         uses: docker/build-push-action@v5
         with:
@@ -33,7 +38,7 @@ jobs:
           file: ./.docker/Dockerfile.cli
           platforms: linux/arm64
           push: true
-          tags: ${{ steps.init.outputs.stripped_endpoint }}/${{ secrets.QUANT_ORGANIZATION }}/${{ steps.init.outputs.quant_application }}:cli-latest
+          tags: ${{ steps.init.outputs.stripped_endpoint }}/${{ secrets.QUANT_ORGANIZATION }}/${{ steps.init.outputs.quant_application }}:cli${{ steps.init.outputs.image_suffix }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           
@@ -44,7 +49,7 @@ jobs:
           file: ./.docker/Dockerfile.php
           platforms: linux/arm64
           push: true
-          tags: ${{ steps.init.outputs.stripped_endpoint }}/${{ secrets.QUANT_ORGANIZATION }}/${{ steps.init.outputs.quant_application }}:php-latest
+          tags: ${{ steps.init.outputs.stripped_endpoint }}/${{ secrets.QUANT_ORGANIZATION }}/${{ steps.init.outputs.quant_application }}:php${{ steps.init.outputs.image_suffix }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           
@@ -65,4 +70,6 @@ jobs:
           echo "Environment: ${{ steps.init.outputs.environment_name }}"
           echo "Production: ${{ steps.init.outputs.is_production }}"
           echo "Registry Endpoint: ${{ steps.init.outputs.stripped_endpoint }}"
-          echo "✅ Docker was automatically logged in during initialization!" 
+          echo "Image Suffix: ${{ steps.init.outputs.image_suffix }}"
+          echo "✅ Docker was automatically logged in during initialization!"
+          echo "🎯 Images will be tagged with: ${{ steps.init.outputs.quant_application }}${{ steps.init.outputs.image_suffix }}" 

@@ -1,5 +1,12 @@
 name: Test Quant Cloud Init Action
 
+# Tests the quant-cloud-init-action with various scenarios:
+# - Valid credentials and main branch logic
+# - Invalid credentials (expected failures)
+# - Non-existent applications (warnings)
+# - Override functionality (app, environment, master branch)
+# - Feature branch logic (unique environments and image tags)
+
 on:
   workflow_dispatch:
   push:
@@ -21,8 +28,7 @@ jobs:
           'invalid-api-key',
           'invalid-organization',
           'non-existent-application',
-          'feature-branch',
-          'tag-deployment'
+          'test-overrides'
         ]
     steps:
       - uses: actions/checkout@v4
@@ -85,30 +91,30 @@ jobs:
           base_url: 'https://portal.stage.quantcdn.io/api/v3'
         continue-on-error: false
 
-      - name: Test Feature Branch Detection
-        if: matrix.test-scenario == 'feature-branch'
+      - name: Test Overrides
+        if: matrix.test-scenario == 'test-overrides'
         uses: ./
-        id: init-feature
+        id: init-overrides
         with:
           quant_api_key: ${{ secrets.QUANT_API_KEY }}
           quant_organization: 'quant'
+          quant_application: 'test-override-app'
+          environment_name_override: 'staging'
+          master_branch_override: 'develop'
           base_url: 'https://portal.stage.quantcdn.io/api/v3'
-        env:
-          GITHUB_REF: 'refs/heads/feature/test-branch'
-          GITHUB_REPOSITORY: 'quant/test-repo'
         continue-on-error: false
 
-      - name: Test Tag Deployment Detection
-        if: matrix.test-scenario == 'tag-deployment'
+      - name: Test Feature Branch Logic (with overrides)
+        if: matrix.test-scenario == 'test-overrides'
         uses: ./
-        id: init-tag
+        id: init-feature-branch
         with:
           quant_api_key: ${{ secrets.QUANT_API_KEY }}
           quant_organization: 'quant'
+          quant_application: 'feature-test-app'
+          # Simulate feature branch by overriding environment name
+          environment_name_override: 'feature-my-big-feature'
           base_url: 'https://portal.stage.quantcdn.io/api/v3'
-        env:
-          GITHUB_REF: 'refs/tags/v1.0.0'
-          GITHUB_REPOSITORY: 'quant/test-repo'
         continue-on-error: false
 
       - name: Validate Valid Credentials Outputs
@@ -121,14 +127,19 @@ jobs:
           echo "Environment: ${{ steps.init-valid.outputs.environment_name }}"
           echo "Is production: ${{ steps.init-valid.outputs.is_production }}"
           echo "Stripped endpoint: ${{ steps.init-valid.outputs.stripped_endpoint }}"
+          echo "Image suffix: ${{ steps.init-valid.outputs.image_suffix }}"
           
-          # Validate expected values
+          # Validate expected values for main branch
           if [[ "${{ steps.init-valid.outputs.environment_name }}" != "production" ]]; then
             echo "❌ Expected environment 'production', got '${{ steps.init-valid.outputs.environment_name }}'"
             exit 1
           fi
           if [[ "${{ steps.init-valid.outputs.is_production }}" != "true" ]]; then
             echo "❌ Expected is_production 'true', got '${{ steps.init-valid.outputs.is_production }}'"
+            exit 1
+          fi
+          if [[ "${{ steps.init-valid.outputs.image_suffix }}" != "-latest" ]]; then
+            echo "❌ Expected image_suffix '-latest', got '${{ steps.init-valid.outputs.image_suffix }}'"
             exit 1
           fi
           echo "✅ Valid credentials test passed"
@@ -176,39 +187,68 @@ jobs:
           fi
           echo "✅ Non-existent application test passed"
 
-      - name: Validate Feature Branch Detection
-        if: matrix.test-scenario == 'feature-branch'
+      - name: Validate Overrides
+        if: matrix.test-scenario == 'test-overrides'
         run: |
-          echo "=== FEATURE BRANCH TEST RESULTS ==="
-          echo "Environment: ${{ steps.init-feature.outputs.environment_name }}"
-          echo "Is production: ${{ steps.init-feature.outputs.is_production }}"
+          echo "=== OVERRIDES TEST RESULTS ==="
+          echo "Application: ${{ steps.init-overrides.outputs.quant_application }}"
+          echo "Environment: ${{ steps.init-overrides.outputs.environment_name }}"
+          echo "Is production: ${{ steps.init-overrides.outputs.is_production }}"
           
-          if [[ "${{ steps.init-feature.outputs.environment_name }}" != "feature" ]]; then
-            echo "❌ Expected environment 'feature', got '${{ steps.init-feature.outputs.environment_name }}'"
+          # Test quant_application override
+          if [[ "${{ steps.init-overrides.outputs.quant_application }}" != "test-override-app" ]]; then
+            echo "❌ Expected application 'test-override-app', got '${{ steps.init-overrides.outputs.quant_application }}'"
             exit 1
           fi
-          if [[ "${{ steps.init-feature.outputs.is_production }}" != "false" ]]; then
-            echo "❌ Expected is_production 'false', got '${{ steps.init-feature.outputs.is_production }}'"
+          
+          # Test environment_name_override
+          if [[ "${{ steps.init-overrides.outputs.environment_name }}" != "staging" ]]; then
+            echo "❌ Expected environment 'staging', got '${{ steps.init-overrides.outputs.environment_name }}'"
             exit 1
           fi
-          echo "✅ Feature branch detection test passed"
+          
+          # Test master_branch_override (should affect is_production)
+          if [[ "${{ steps.init-overrides.outputs.is_production }}" != "false" ]]; then
+            echo "❌ Expected is_production 'false' with master_branch_override='develop', got '${{ steps.init-overrides.outputs.is_production }}'"
+            exit 1
+          fi
+          
+          # Test image suffix with overrides
+          if [[ "${{ steps.init-overrides.outputs.image_suffix }}" != "-main" ]]; then
+            echo "❌ Expected image_suffix '-main' with master_branch_override='develop', got '${{ steps.init-overrides.outputs.image_suffix }}'"
+            exit 1
+          fi
+          
+          echo "✅ All overrides test passed"
 
-      - name: Validate Tag Deployment Detection
-        if: matrix.test-scenario == 'tag-deployment'
+      - name: Validate Feature Branch Logic
+        if: matrix.test-scenario == 'test-overrides'
         run: |
-          echo "=== TAG DEPLOYMENT TEST RESULTS ==="
-          echo "Environment: ${{ steps.init-tag.outputs.environment_name }}"
-          echo "Is production: ${{ steps.init-tag.outputs.is_production }}"
+          echo "=== FEATURE BRANCH LOGIC TEST RESULTS ==="
+          echo "Application: ${{ steps.init-feature-branch.outputs.quant_application }}"
+          echo "Environment: ${{ steps.init-feature-branch.outputs.environment_name }}"
+          echo "Is production: ${{ steps.init-feature-branch.outputs.is_production }}"
+          echo "Image suffix: ${{ steps.init-feature-branch.outputs.image_suffix }}"
           
-          if [[ "${{ steps.init-tag.outputs.environment_name }}" != "production" ]]; then
-            echo "❌ Expected environment 'production', got '${{ steps.init-tag.outputs.environment_name }}'"
+          # Test feature branch environment name
+          if [[ "${{ steps.init-feature-branch.outputs.environment_name }}" != "feature-my-big-feature" ]]; then
+            echo "❌ Expected environment 'feature-my-big-feature', got '${{ steps.init-feature-branch.outputs.environment_name }}'"
             exit 1
           fi
-          if [[ "${{ steps.init-tag.outputs.is_production }}" != "true" ]]; then
-            echo "❌ Expected is_production 'true', got '${{ steps.init-tag.outputs.is_production }}'"
+          
+          # Test feature branch image suffix (should match environment name)
+          if [[ "${{ steps.init-feature-branch.outputs.image_suffix }}" != "-feature-my-big-feature" ]]; then
+            echo "❌ Expected image_suffix '-feature-my-big-feature', got '${{ steps.init-feature-branch.outputs.image_suffix }}'"
             exit 1
           fi
-          echo "✅ Tag deployment detection test passed"
+          
+          # Test that feature branches are not production
+          if [[ "${{ steps.init-feature-branch.outputs.is_production }}" != "false" ]]; then
+            echo "❌ Expected is_production 'false' for feature branch, got '${{ steps.init-feature-branch.outputs.is_production }}'"
+            exit 1
+          fi
+          
+          echo "✅ Feature branch logic test passed"
 
       - name: Test Summary
         run: |
@@ -220,5 +260,5 @@ jobs:
           echo "  - Invalid API key: ${{ steps.init-invalid-key.outcome || 'N/A' }}"
           echo "  - Invalid org: ${{ steps.init-invalid-org.outcome || 'N/A' }}"
           echo "  - Non-existent app: ${{ steps.init-no-app.outcome || 'N/A' }}"
-          echo "  - Feature branch: ${{ steps.init-feature.outcome || 'N/A' }}"
-          echo "  - Tag deployment: ${{ steps.init-tag.outcome || 'N/A' }}" 
+          echo "  - Overrides: ${{ steps.init-overrides.outcome || 'N/A' }}"
+          echo "  - Feature branch logic: ${{ steps.init-feature-branch.outcome || 'N/A' }}" 

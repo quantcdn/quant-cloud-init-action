@@ -32,8 +32,30 @@ A GitHub Action for initializing Quant Cloud deployments with environment detect
 | `environment_name` | The determined environment name |
 | `is_production` | Whether this is a production environment |
 | `stripped_endpoint` | Quant Cloud Image Registry endpoint without protocol (for Docker tags) |
+| `image_suffix` | The determined image tag suffix (e.g., -latest, -develop, -v1.0.0) |
 
 > **Note**: Registry credentials (username, password, endpoint) are no longer exposed as outputs since Docker login is handled automatically.
+
+## Image Tagging with `image_suffix`
+
+The `image_suffix` output provides the appropriate tag suffix for Docker images based on your branch or tag:
+
+- **main/master branches**: `-latest` (e.g., `myapp:latest`)
+- **develop branch**: `-develop` (e.g., `myapp:develop`)  
+- **feature branches**: `-{branch-name}` (e.g., `myapp:feature-new-feature`)
+- **tags**: `-tag-name` (e.g., `myapp:v1.0.0`)
+
+### Usage Example
+```yaml
+- name: Build and push image
+  uses: docker/build-push-action@v5
+  with:
+    context: .
+    push: true
+    tags: ${{ steps.init.outputs.stripped_endpoint }}/${{ secrets.QUANT_ORGANIZATION }}/${{ steps.init.outputs.quant_application }}${{ steps.init.outputs.image_suffix }}
+```
+
+This automatically creates the correct image tag based on your current branch or tag!
 
 ## Environment Detection Logic
 
@@ -41,7 +63,7 @@ The action automatically determines the environment based on the current branch:
 
 - **main/master branches**: `production` environment with `-latest` image suffix
 - **develop branch**: `develop` environment with `-develop` image suffix  
-- **feature branches**: `feature` environment with `-{branch-name}` image suffix
+- **feature branches**: `{branch-name}` environment with `-{branch-name}` image suffix
 - **tags**: `production` environment with `-{tag-name}` image suffix
 - **other branches**: `{branch-name}` environment with `-{branch-name}` image suffix
 
@@ -62,7 +84,7 @@ The action automatically determines the environment based on the current branch:
   with:
     context: .
     push: true
-    tags: ${{ steps.init.outputs.stripped_endpoint }}/${{ secrets.QUANT_ORGANIZATION }}/${{ steps.init.outputs.quant_application }}:latest
+              tags: ${{ steps.init.outputs.stripped_endpoint }}/${{ secrets.QUANT_ORGANIZATION }}/${{ steps.init.outputs.quant_application }}${{ steps.init.outputs.image_suffix }}
 ```
 
 ### With Custom Application Name
@@ -119,7 +141,7 @@ jobs:
           file: ./.docker/Dockerfile.cli
           platforms: linux/arm64
           push: true
-          tags: ${{ steps.init.outputs.stripped_endpoint }}/${{ secrets.QUANT_ORGANIZATION }}/${{ steps.init.outputs.quant_application }}:cli-latest
+          tags: ${{ steps.init.outputs.stripped_endpoint }}/${{ secrets.QUANT_ORGANIZATION }}/${{ steps.init.outputs.quant_application }}:cli${{ steps.init.outputs.image_suffix }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           
@@ -130,7 +152,7 @@ jobs:
           file: ./.docker/Dockerfile.php
           platforms: linux/arm64
           push: true
-          tags: ${{ steps.init.outputs.stripped_endpoint }}/${{ secrets.QUANT_ORGANIZATION }}/${{ steps.init.outputs.quant_application }}:php-latest
+          tags: ${{ steps.init.outputs.stripped_endpoint }}/${{ secrets.QUANT_ORGANIZATION }}/${{ steps.init.outputs.quant_application }}:php${{ steps.init.outputs.image_suffix }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           
@@ -151,6 +173,7 @@ jobs:
           echo "Environment: ${{ steps.init.outputs.environment_name }}"
           echo "Production: ${{ steps.init.outputs.is_production }}"
           echo "Registry Endpoint: ${{ steps.init.outputs.stripped_endpoint }}"
+          echo "Image Suffix: ${{ steps.init.outputs.image_suffix }}"
 ```
 
 ## Error Handling
