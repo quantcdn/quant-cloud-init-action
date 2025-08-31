@@ -79,7 +79,7 @@ The action automatically determines the environment based on the current branch:
     quant_organization: ${{ secrets.QUANT_ORGANIZATION }}
     quant_api_key: ${{ secrets.QUANT_API_KEY }}
 
-- name: Build and push image (Docker is already logged in!)
+- name: Build and push image
   uses: docker/build-push-action@v5
   with:
     context: .
@@ -134,7 +134,7 @@ jobs:
           quant_organization: ${{ secrets.QUANT_ORGANIZATION }}
           quant_api_key: ${{ secrets.QUANT_API_KEY }}
           
-      - name: Build and push CLI image (no login needed!)
+      - name: Build and push CLI image
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -145,7 +145,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           
-      - name: Build and push PHP image (no login needed!)
+      - name: Build and push PHP image
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -156,8 +156,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           
-      - name: Redeploy environment (if not feature branch)
-        if: steps.init.outputs.environment_name != 'feature'
+      - name: Redeploy environment
         uses: quantcdn/quant-cloud-environment-state-action@v1
         with:
           api_key: ${{ secrets.QUANT_API_KEY }}
