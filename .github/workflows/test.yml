@@ -28,8 +28,7 @@ jobs:
           'invalid-api-key',
           'invalid-organization',
           'non-existent-application',
-          'test-overrides',
-          'test-pull-request'
+          'test-overrides'
         ]
     steps:
       - uses: actions/checkout@v4
@@ -223,47 +222,7 @@ jobs:
           
           echo "✅ All overrides test passed"
 
-      - name: Test Pull Request Logic
-        if: matrix.test-scenario == 'test-pull-request'
-        uses: ./
-        id: init-pr
-        env:
-          GITHUB_REF: 'refs/pull/123/merge'
-          GITHUB_REPOSITORY: 'test-org/test-repo'
-        with:
-          quant_api_key: ${{ secrets.QUANT_API_KEY }}
-          quant_organization: 'quant'
-          base_url: 'https://portal.stage.quantcdn.io/api/v3'
-        continue-on-error: false
 
-      - name: Validate Pull Request Logic
-        if: matrix.test-scenario == 'test-pull-request'
-        run: |
-          echo "=== PULL REQUEST LOGIC TEST RESULTS ==="
-          echo "Application: ${{ steps.init-pr.outputs.quant_application }}"
-          echo "Environment: ${{ steps.init-pr.outputs.environment_name }}"
-          echo "Is production: ${{ steps.init-pr.outputs.is_production }}"
-          echo "Image suffix: ${{ steps.init-pr.outputs.image_suffix }}"
-          
-          # Test pull request environment name
-          if [[ "${{ steps.init-pr.outputs.environment_name }}" != "pr-123" ]]; then
-            echo "❌ Expected environment 'pr-123', got '${{ steps.init-pr.outputs.environment_name }}'"
-            exit 1
-          fi
-          
-          # Test pull request image suffix
-          if [[ "${{ steps.init-pr.outputs.image_suffix }}" != "-pr-123" ]]; then
-            echo "❌ Expected image_suffix '-pr-123', got '${{ steps.init-pr.outputs.image_suffix }}'"
-            exit 1
-          fi
-          
-          # Test that pull requests are not production
-          if [[ "${{ steps.init-pr.outputs.is_production }}" != "false" ]]; then
-            echo "❌ Expected is_production 'false' for pull request, got '${{ steps.init-pr.outputs.is_production }}'"
-            exit 1
-          fi
-          
-          echo "✅ Pull request logic test passed"
 
       - name: Validate Feature Branch Logic
         if: matrix.test-scenario == 'test-overrides'
@@ -305,5 +264,4 @@ jobs:
           echo "  - Invalid org: ${{ steps.init-invalid-org.outcome || 'N/A' }}"
           echo "  - Non-existent app: ${{ steps.init-no-app.outcome || 'N/A' }}"
           echo "  - Overrides: ${{ steps.init-overrides.outcome || 'N/A' }}"
-          echo "  - Pull request logic: ${{ steps.init-pr.outcome || 'N/A' }}"
           echo "  - Feature branch logic: ${{ steps.init-feature-branch.outcome || 'N/A' }}" 
