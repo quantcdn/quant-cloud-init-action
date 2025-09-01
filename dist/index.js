@@ -63716,16 +63716,17 @@ async function run() {
             core.info(`You can create this application in the Quant Cloud dashboard or it will be created automatically on first deployment`);
             projectExists = false;
         }
-        // Check if environment exists (optional - won't fail if it doesn't)
+        // Check if environment exists using EnvironmentsApi
         try {
-            // This would need to be implemented based on your Quant Cloud API
-            // For now, we'll assume it exists if we can get registry credentials
-            // Note: This is a simplified check - in reality, you'd want to validate against actual environments
+            core.info(`Checking if environment '${environmentName}' exists in application '${applicationName}'...`);
+            const environment = await environmentsClient.getEnvironment(organization, applicationName, environmentName);
             environmentExists = true;
-            core.info(`✅ Environment ${environmentName} validation successful (simplified check)`);
+            core.info(`✅ Environment '${environmentName}' exists in Quant Cloud`);
         }
         catch (envError) {
-            core.warning(`Environment ${environmentName} may not exist yet - this is normal for new projects`);
+            const errorMessage = envError instanceof Error ? envError.message : 'Unknown error';
+            core.info(`Environment '${environmentName}' does not exist yet - this is normal for new projects`);
+            core.info(`You can create this environment in the Quant Cloud dashboard or it will be created automatically on first deployment`);
             environmentExists = false;
         }
     }
