@@ -14,7 +14,7 @@
     "quant-ts-client": "github:quantcdn/quant-ts-client#v3"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^24.3.1",
     "@vercel/ncc": "^0.38.3",
     "husky": "^9.1.7",
     "typescript": "^5.0.0"
