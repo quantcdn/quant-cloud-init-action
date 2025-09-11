@@ -379,6 +379,7 @@ async function run() {
         core.setOutput('is_production', isProduction.toString());
         core.setOutput('stripped_endpoint', strippedEndpoint);
         core.setOutput('image_suffix', imageSuffix);
+        core.setOutput('image_suffix_clean', imageSuffix.replace(/^-/, ''));
         
         // Log summary
         core.info('🎉 Quant Cloud initialization completed successfully!');

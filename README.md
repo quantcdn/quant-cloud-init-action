@@ -33,6 +33,7 @@ A GitHub Action for initializing Quant Cloud deployments with environment detect
 | `is_production` | Whether this is a production environment |
 | `stripped_endpoint` | Quant Cloud Image Registry endpoint without protocol (for Docker tags) |
 | `image_suffix` | The determined image tag suffix (e.g., -latest, -develop, -v1.0.0) |
+| `image_suffix_clean` | The determined image tag suffix without leading hyphen (e.g., latest, develop, v1.0.0) |
 
 > **Note**: Registry credentials (username, password, endpoint) are no longer exposed as outputs since Docker login is handled automatically.
 

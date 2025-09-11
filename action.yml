@@ -37,6 +37,8 @@ outputs:
     description: 'Quant Cloud Image Registry endpoint without protocol (for Docker tags)'
   image_suffix:
     description: 'The determined image tag suffix (e.g., -latest, -develop, -v1.0.0)'
+  image_suffix_clean:
+    description: 'The determined image tag suffix without leading hyphen (e.g., latest, develop, v1.0.0)'
 runs:
   using: 'node20'
   main: 'dist/index.js' 
