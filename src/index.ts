@@ -282,16 +282,20 @@ async function run() {
         try {
             const application = await applicationsClient.getApplication(organization, applicationName);
             projectExists = true;
+            core.info(`✅ Application '${applicationName}' exists`);
         } catch (appError) {
             projectExists = false;
+            core.info(`ℹ️ Application '${applicationName}' does not exist (will be created on first deployment)`);
         }
 
         // Check if environment exists using EnvironmentsApi
         try {
             const environment = await environmentsClient.getEnvironment(organization, applicationName, environmentName);
             environmentExists = true;
+            core.info(`✅ Environment '${environmentName}' exists`);
         } catch (envError) {
             environmentExists = false;
+            core.info(`ℹ️ Environment '${environmentName}' does not exist (will be created on first deployment)`);
         }
 
     } catch (error) {
