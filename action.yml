@@ -22,6 +22,10 @@ inputs:
   base_url:
     description: 'Quant Cloud API base URL'
     required: false
+  skip_docker_login:
+    description: 'Skip Docker login step (useful for testing against mock APIs)'
+    required: false
+    default: 'false'
 outputs:
   project_exists:
     description: 'Whether the project exists in Quant Cloud'

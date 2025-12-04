@@ -9,6 +9,9 @@ name: Test Quant Cloud Init Action
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -21,6 +24,16 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      quant-mock-api:
+        image: ghcr.io/quantcdn/quant-mock-api:4.4.0-51a3a43
+        ports:
+          - 4010:4010
+        options: >-
+          --health-cmd "nc -z 127.0.0.1 4010"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     strategy:
       matrix:
         test-scenario: [
@@ -55,9 +68,10 @@ jobs:
         uses: ./
         id: init-valid
         with:
-          quant_api_key: ${{ secrets.QUANT_API_KEY }}
-          quant_organization: 'quant'
-          base_url: 'https://portal.stage.quantcdn.io/api/v3'
+          quant_api_key: 'test-api-key'
+          quant_organization: 'test-org'
+          base_url: 'http://localhost:4010'
+          skip_docker_login: true
         continue-on-error: false
 
       - name: Test Invalid API Key (Expected Failure)
@@ -66,8 +80,8 @@ jobs:
         id: init-invalid-key
         with:
           quant_api_key: 'invalid-key-12345'
-          quant_organization: 'quant'
-          base_url: 'https://portal.stage.quantcdn.io/api/v3'
+          quant_organization: 'test-org'
+          base_url: 'http://localhost:4010'
         continue-on-error: true
 
       - name: Test Invalid Organization (Expected Failure)
@@ -75,9 +89,10 @@ jobs:
         uses: ./
         id: init-invalid-org
         with:
-          quant_api_key: ${{ secrets.QUANT_API_KEY }}
+          quant_api_key: 'test-api-key'
           quant_organization: 'non-existent-org-12345'
-          base_url: 'https://portal.stage.quantcdn.io/api/v3'
+          base_url: 'http://localhost:4010'
+          skip_docker_login: true
         continue-on-error: true
 
       - name: Test Non-Existent Application (Expected Warning)
@@ -85,10 +100,11 @@ jobs:
         uses: ./
         id: init-no-app
         with:
-          quant_api_key: ${{ secrets.QUANT_API_KEY }}
-          quant_organization: 'quant'
+          quant_api_key: 'test-api-key'
+          quant_organization: 'test-org'
           quant_application: 'non-existent-app-12345'
-          base_url: 'https://portal.stage.quantcdn.io/api/v3'
+          base_url: 'http://localhost:4010'
+          skip_docker_login: true
         continue-on-error: false
 
       - name: Test Overrides
@@ -96,12 +112,13 @@ jobs:
         uses: ./
         id: init-overrides
         with:
-          quant_api_key: ${{ secrets.QUANT_API_KEY }}
-          quant_organization: 'quant'
+          quant_api_key: 'test-api-key'
+          quant_organization: 'test-org'
           quant_application: 'test-override-app'
           environment_name_override: 'staging'
           master_branch_override: 'develop'
-          base_url: 'https://portal.stage.quantcdn.io/api/v3'
+          base_url: 'http://localhost:4010'
+          skip_docker_login: true
         continue-on-error: false
 
       - name: Test Feature Branch Logic (with overrides)
@@ -109,12 +126,13 @@ jobs:
         uses: ./
         id: init-feature-branch
         with:
-          quant_api_key: ${{ secrets.QUANT_API_KEY }}
-          quant_organization: 'quant'
+          quant_api_key: 'test-api-key'
+          quant_organization: 'test-org'
           quant_application: 'feature-test-app'
           # Simulate feature branch by overriding environment name
           environment_name_override: 'feature-my-big-feature'
-          base_url: 'https://portal.stage.quantcdn.io/api/v3'
+          base_url: 'http://localhost:4010'
+          skip_docker_login: true
         continue-on-error: false
 
       - name: Validate Valid Credentials Outputs
@@ -129,18 +147,35 @@ jobs:
           echo "Stripped endpoint: ${{ steps.init-valid.outputs.stripped_endpoint }}"
           echo "Image suffix: ${{ steps.init-valid.outputs.image_suffix }}"
           
-          # Validate expected values for main branch
-          if [[ "${{ steps.init-valid.outputs.environment_name }}" != "production" ]]; then
-            echo "❌ Expected environment 'production', got '${{ steps.init-valid.outputs.environment_name }}'"
-            exit 1
-          fi
-          if [[ "${{ steps.init-valid.outputs.is_production }}" != "true" ]]; then
-            echo "❌ Expected is_production 'true', got '${{ steps.init-valid.outputs.is_production }}'"
-            exit 1
-          fi
-          if [[ "${{ steps.init-valid.outputs.image_suffix }}" != "-latest" ]]; then
-            echo "❌ Expected image_suffix '-latest', got '${{ steps.init-valid.outputs.image_suffix }}'"
-            exit 1
+          # Validate expected values based on event type
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "ℹ️ Running in PR context"
+            if [[ "${{ steps.init-valid.outputs.environment_name }}" != pr-* ]]; then
+              echo "❌ Expected environment starting with 'pr-', got '${{ steps.init-valid.outputs.environment_name }}'"
+              exit 1
+            fi
+            if [[ "${{ steps.init-valid.outputs.is_production }}" != "false" ]]; then
+              echo "❌ Expected is_production 'false', got '${{ steps.init-valid.outputs.is_production }}'"
+              exit 1
+            fi
+            if [[ "${{ steps.init-valid.outputs.image_suffix }}" != -pr-* ]]; then
+              echo "❌ Expected image_suffix starting with '-pr-', got '${{ steps.init-valid.outputs.image_suffix }}'"
+              exit 1
+            fi
+          else
+            echo "ℹ️ Running in Push context (assuming main branch)"
+            if [[ "${{ steps.init-valid.outputs.environment_name }}" != "production" ]]; then
+              echo "❌ Expected environment 'production', got '${{ steps.init-valid.outputs.environment_name }}'"
+              exit 1
+            fi
+            if [[ "${{ steps.init-valid.outputs.is_production }}" != "true" ]]; then
+              echo "❌ Expected is_production 'true', got '${{ steps.init-valid.outputs.is_production }}'"
+              exit 1
+            fi
+            if [[ "${{ steps.init-valid.outputs.image_suffix }}" != "-latest" ]]; then
+              echo "❌ Expected image_suffix '-latest', got '${{ steps.init-valid.outputs.image_suffix }}'"
+              exit 1
+            fi
           fi
           echo "✅ Valid credentials test passed"
 

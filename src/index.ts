@@ -2,8 +2,9 @@ import * as core from '@actions/core';
 import * as exec from '@actions/exec';
 import {
     ApplicationsApi,
-    EnvironmentsApi
-} from 'quant-ts-client';
+    EnvironmentsApi,
+    Configuration
+} from '@quantcdn/quant-client';
 
 interface ApiError {
     body?: {
@@ -11,14 +12,11 @@ interface ApiError {
     }
 }
 
-const apiOpts = (apiKey: string) => {
-    return {
-        applyToRequest: (requestOptions: any) => {
-            if (requestOptions && requestOptions.headers) {
-                requestOptions.headers["Authorization"] = `Bearer ${apiKey}`;
-            }
-        }
-    }
+const createConfig = (apiKey: string, baseUrl: string) => {
+    return new Configuration({
+        basePath: baseUrl,
+        accessToken: apiKey
+    });
 }
 
 /**
@@ -59,7 +57,7 @@ function extractPullRequestId(ref: string): string | null {
  * Generate environment name based on branch and overrides
  */
 function generateEnvironmentName(
-    branch: string, 
+    branch: string,
     environmentNameOverride?: string,
     masterBranchOverride?: string,
     isTagRef: boolean = false,
@@ -97,8 +95,8 @@ function generateEnvironmentName(
  * Generate image tag suffix based on branch
  */
 function generateImageSuffix(
-    branch: string, 
-    masterBranchOverride?: string, 
+    branch: string,
+    masterBranchOverride?: string,
     isTagRef: boolean = false,
     isPrRef: boolean = false,
     prId?: string | null
@@ -107,12 +105,12 @@ function generateImageSuffix(
     if (isTagRef) {
         return `-${branch}`;
     }
-    
+
     // Pull requests get unique PR suffixes
     if (isPrRef && prId) {
         return `-pr-${prId}`;
     }
-    
+
     if (isProductionBranch(branch, masterBranchOverride)) {
         return '-latest';
     } else if (branch === 'develop') {
@@ -147,7 +145,7 @@ async function dockerLogin(endpoint: string, username: string, password: string)
         ], {
             silent: true
         });
-        
+
         core.info('✅ Docker login successful');
     } catch (error) {
         core.error('❌ Docker login failed');
@@ -189,7 +187,7 @@ async function run() {
     let isTag = false;
     let isPr = false;
     let prId: string | null = null;
-    
+
     if (githubRef.startsWith('refs/tags/')) {
         branch = githubRef.replace('refs/tags/', '');
         isTag = true;
@@ -228,9 +226,9 @@ async function run() {
         // Use normal branch-based production detection
         isProduction = isProductionBranch(branch, masterBranchOverride) || isTag;
     }
-    
+
     const environmentName = generateEnvironmentName(branch, environmentNameOverride, masterBranchOverride, isTag, isPr, prId);
-    
+
     // Generate image suffix - if environment is overridden, use it for the suffix
     let imageSuffix: string;
     if (environmentNameOverride) {
@@ -242,17 +240,15 @@ async function run() {
         // Use normal branch-based suffix generation
         imageSuffix = generateImageSuffix(branch, masterBranchOverride, isTag, isPr, prId);
     }
-    
+
     // For tags, we need to extract the tag name from the ref
     const tagName = isTag ? branch : null;
 
 
-    // Initialize API clients
-    const applicationsClient = new ApplicationsApi(baseUrl);
-    const environmentsClient = new EnvironmentsApi(baseUrl);
-    
-    applicationsClient.setDefaultAuthentication(apiOpts(apiKey));
-    environmentsClient.setDefaultAuthentication(apiOpts(apiKey));
+    // Initialize API clients with configuration
+    const config = createConfig(apiKey, baseUrl);
+    const applicationsClient = new ApplicationsApi(config);
+    const environmentsClient = new EnvironmentsApi(config);
 
     // Validate organization and API key by checking if project exists
     let projectExists = false;
@@ -260,22 +256,34 @@ async function run() {
 
     try {
         core.info(`🔍 Validating Quant Cloud access...`);
-        
+
         // First, check if the organization exists by trying to list applications
         try {
             const applications = await applicationsClient.listApplications(organization);
-        } catch (orgError) {
+        } catch (orgError: any) {
             const errorMessage = orgError instanceof Error ? orgError.message : 'Unknown error';
+            // Fail on any error, including 404, as the mock API is now fixed for this endpoint
             core.setFailed(`Organization '${organization}' does not exist or is not accessible: ${errorMessage}`);
             return;
         }
-        
+
         // Try to get Quant Cloud Image Registry credentials as a validation step
-        const registryToken = await applicationsClient.getEcrLoginCredentials(organization);
-        
-        if (!registryToken.body || !registryToken.body.password) {
-            core.setFailed('No Quant Cloud Image Registry credentials found - organization may not exist or API key may be invalid');
-            return;
+        try {
+            const registryToken = await applicationsClient.getEcrLoginCredentials(organization);
+
+            if (!registryToken.data || !registryToken.data.password) {
+                core.warning('No Quant Cloud Image Registry credentials found during validation');
+            }
+        } catch (ecrError: any) {
+            const errorMessage = ecrError instanceof Error ? ecrError.message : 'Unknown error';
+            const status = ecrError.response?.status;
+
+            if (status === 422 || status === 401 || status === 403) {
+                core.setFailed(`Failed to validate organization credentials: ${errorMessage}`);
+                return;
+            } else {
+                core.warning(`Could not retrieve ECR credentials during validation: ${errorMessage}`);
+            }
         }
 
         // Now check if the specific application exists
@@ -283,7 +291,15 @@ async function run() {
             const application = await applicationsClient.getApplication(organization, applicationName);
             projectExists = true;
             core.info(`✅ Application '${applicationName}' exists`);
-        } catch (appError) {
+        } catch (appError: any) {
+            const status = appError.response?.status;
+
+            if (status === 422 || status === 401 || status === 403) {
+                const errorMessage = appError instanceof Error ? appError.message : 'Unknown error';
+                core.setFailed(`Failed to validate application: ${errorMessage}`);
+                return;
+            }
+
             projectExists = false;
             core.info(`ℹ️ Application '${applicationName}' does not exist (will be created on first deployment)`);
         }
@@ -319,37 +335,54 @@ async function run() {
 
     // Get Quant Cloud Image Registry credentials and login to Docker
     try {
-        const registryToken = await applicationsClient.getEcrLoginCredentials(organization);
+        let endpoint = '';
+        let username = '';
+        let password = '';
+        let hasCredentials = false;
 
-        if (!registryToken.body || !registryToken.body.password) {
-            core.setFailed('Failed to retrieve Quant Cloud Image Registry credentials');
-            return;
+        try {
+            const registryToken = await applicationsClient.getEcrLoginCredentials(organization);
+            if (registryToken.data && registryToken.data.password && registryToken.data.endpoint && registryToken.data.username) {
+                endpoint = registryToken.data.endpoint;
+                username = registryToken.data.username;
+                password = registryToken.data.password;
+                hasCredentials = true;
+            }
+        } catch (error) {
+            core.warning(`Failed to retrieve Quant Cloud Image Registry credentials: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
 
-        const endpoint = registryToken.body.endpoint;
-        if (!endpoint) {
-            core.setFailed('No Quant Cloud Image Registry endpoint found');
-            return;
-        }
-        const strippedEndpoint = stripProtocol(endpoint);
+        const skipDockerLogin = core.getInput('skip_docker_login') === 'true';
 
-        // Login to Docker registry
-        if (!registryToken.body.username) {
-            core.setFailed('No Quant Cloud Image Registry username found');
-            return;
-        }
-        await dockerLogin(endpoint, registryToken.body.username, registryToken.body.password);
+        if (hasCredentials) {
+            const strippedEndpoint = stripProtocol(endpoint);
 
-        // Set outputs (excluding registry credentials)
+            // Login to Docker registry
+            if (skipDockerLogin) {
+                core.info('⚠️ Skipping Docker login as requested');
+            } else {
+                await dockerLogin(endpoint, username, password);
+            }
+
+            core.setOutput('stripped_endpoint', strippedEndpoint);
+        } else {
+            if (skipDockerLogin) {
+                core.info('⚠️ Skipping Docker login as requested (and no credentials available)');
+            } else {
+                core.setFailed('Failed to retrieve Quant Cloud Image Registry credentials and login was not skipped');
+                return;
+            }
+        }
+
+        // Set outputs
         core.setOutput('project_exists', projectExists.toString());
         core.setOutput('environment_exists', environmentExists.toString());
         core.setOutput('quant_application', applicationName);
         core.setOutput('environment_name', environmentName);
         core.setOutput('is_production', isProduction.toString());
-        core.setOutput('stripped_endpoint', strippedEndpoint);
         core.setOutput('image_suffix', imageSuffix);
         core.setOutput('image_suffix_clean', imageSuffix.replace(/^-/, ''));
-        
+
         // Log summary
         core.info(`✅ Quant Cloud initialized: ${applicationName}/${environmentName} ${isProduction ? '(production)' : '(non-production)'} ${imageSuffix}`);
 

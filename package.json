@@ -11,7 +11,7 @@
   "dependencies": {
     "@actions/core": "^1.10.0",
     "@actions/exec": "^1.1.1",
-    "quant-ts-client": "github:quantcdn/quant-ts-client#v3"
+    "@quantcdn/quant-client": "^4.4.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
