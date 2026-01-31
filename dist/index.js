@@ -63446,6 +63446,9 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(7484));
 const exec = __importStar(__nccwpck_require__(5236));
+const fs = __importStar(__nccwpck_require__(9896));
+const path = __importStar(__nccwpck_require__(6928));
+const os = __importStar(__nccwpck_require__(857));
 const quant_ts_client_1 = __nccwpck_require__(4534);
 const apiOpts = (apiKey) => {
     return {
@@ -63550,11 +63553,40 @@ function stripProtocol(endpoint) {
     return endpoint.replace(/^https?:\/\//, '');
 }
 /**
+ * Write Docker config file for registry authentication
+ */
+async function writeDockerConfig(endpoint, username, password, configPath) {
+    try {
+        const auth = Buffer.from(`${username}:${password}`).toString('base64');
+        const config = {
+            auths: {
+                [endpoint]: {
+                    auth: auth
+                }
+            }
+        };
+        // Ensure directory exists
+        const configDir = path.dirname(configPath);
+        if (!fs.existsSync(configDir)) {
+            fs.mkdirSync(configDir, { recursive: true });
+        }
+        // Write config file
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+        return true;
+    }
+    catch (error) {
+        core.warning(`Failed to write Docker config to ${configPath}: ${error}`);
+        return false;
+    }
+}
+/**
  * Login to Docker registry using Quant Cloud Image Registry credentials
+ * Automatically detects and configures both standard Docker and Kaniko
  */
 async function dockerLogin(endpoint, username, password) {
+    let dockerLoginSuccess = false;
+    // Try standard docker login first (for regular runners)
     try {
-        // Use docker login command with silent output to hide credentials
         await exec.exec('docker', [
             'login',
             endpoint,
@@ -63564,10 +63596,31 @@ async function dockerLogin(endpoint, username, password) {
             silent: true
         });
         core.info('✅ Docker login successful');
+        dockerLoginSuccess = true;
     }
     catch (error) {
-        core.error('❌ Docker login failed');
-        throw error;
+        core.warning('⚠️ Docker CLI not available (this is normal for Kaniko-based runners)');
+    }
+    // Write Docker config to standard location (works for both Docker and Kaniko)
+    const homeDir = os.homedir();
+    const dockerConfigPath = path.join(homeDir, '.docker', 'config.json');
+    const dockerConfigWritten = await writeDockerConfig(endpoint, username, password, dockerConfigPath);
+    if (dockerConfigWritten) {
+        core.info(`✅ Docker config written to ${dockerConfigPath}`);
+    }
+    // Auto-detect Kaniko and write config if running in Kaniko container
+    const kanikoDir = '/kaniko';
+    if (fs.existsSync(kanikoDir)) {
+        const kanikoConfigPath = path.join(kanikoDir, '.docker', 'config.json');
+        const kanikoConfigWritten = await writeDockerConfig(endpoint, username, password, kanikoConfigPath);
+        if (kanikoConfigWritten) {
+            core.info(`✅ Kaniko config written to ${kanikoConfigPath}`);
+            core.info('🚀 Kaniko mode detected - registry authentication configured automatically');
+        }
+    }
+    // Verify at least one method worked
+    if (!dockerLoginSuccess && !dockerConfigWritten) {
+        throw new Error('Failed to configure Docker/Kaniko authentication');
     }
 }
 /**
