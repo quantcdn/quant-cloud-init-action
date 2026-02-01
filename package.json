@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@actions/core": "^1.10.0",
-    "@actions/exec": "^1.1.1",
+    "@actions/exec": "^3.0.0",
     "quant-ts-client": "github:quantcdn/quant-ts-client#v3"
   },
   "devDependencies": {
