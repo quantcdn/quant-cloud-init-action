@@ -40,5 +40,5 @@ outputs:
   image_suffix_clean:
     description: 'The determined image tag suffix without leading hyphen (e.g., latest, develop, v1.0.0)'
 runs:
-  using: 'node20'
+  using: 'node24'
   main: 'dist/index.js' 
