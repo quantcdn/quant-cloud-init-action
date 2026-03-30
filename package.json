@@ -9,7 +9,7 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@actions/core": "^1.10.0",
+    "@actions/core": "^3.0.0",
     "@actions/exec": "^1.1.1",
     "@quantcdn/quant-client": "^4.12.0"
   },
