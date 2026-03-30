@@ -62,7 +62,7 @@ This action uses the following key dependencies:
 
 - `@actions/core`: GitHub's core action utilities
 - `@actions/exec`: GitHub's execution utilities
-- `quant-ts-client`: Quant Cloud TypeScript client
+- `@quantcdn/quant-client`: Quant Cloud TypeScript client
 
 We monitor these dependencies for security vulnerabilities and update them regularly.
 
