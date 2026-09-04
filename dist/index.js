@@ -48219,6 +48219,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(7484));
 const exec = __importStar(__nccwpck_require__(5236));
 const quant_client_1 = __nccwpck_require__(6491);
+const DEFAULT_BASE_URL = 'https://dashboard.quantcdn.io';
 function isProductionBranch(branch, masterBranchOverride) {
     const productionBranches = masterBranchOverride ? [masterBranchOverride] : ['main', 'master'];
     return productionBranches.includes(branch);
@@ -48295,11 +48296,10 @@ async function run() {
     const masterBranchOverride = core.getInput('master_branch_override', { required: false });
     const environmentNameOverride = core.getInput('environment_name_override', { required: false });
     let baseUrl = core.getInput('base_url', { required: false });
-    if (!baseUrl) {
-        baseUrl = 'https://dashboard.quantcdn.io';
-    }
-    else {
-        baseUrl = baseUrl.replace(/\/api\/v3\/?$/, '');
+    baseUrl = baseUrl
+        ? baseUrl.replace(/\/api\/v3\/?$/, '').replace(/\/+$/, '')
+        : DEFAULT_BASE_URL;
+    if (baseUrl !== DEFAULT_BASE_URL) {
         core.warning(`Using non-default base URL: ${baseUrl}`);
     }
     const githubRef = process.env.GITHUB_REF;
