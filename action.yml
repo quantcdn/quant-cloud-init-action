@@ -41,4 +41,5 @@ outputs:
     description: 'The determined image tag suffix without leading hyphen (e.g., latest, develop, v1.0.0)'
 runs:
   using: 'node24'
+  pre: 'runtime-check.cjs'
   main: 'dist/index.js' 
