@@ -42,7 +42,7 @@ A GitHub Action for initializing Quant Cloud deployments with environment detect
 The `image_suffix` output provides the appropriate tag suffix for Docker images based on your branch or tag:
 
 - **main/master branches**: `-latest` (e.g., `myapp:latest`)
-- **develop branch**: `-develop` (e.g., `myapp:develop`)  
+- **develop branch**: `-develop` (e.g., `myapp:develop`)
 - **feature branches**: `-{branch-name}` (e.g., `myapp:feature-new-feature`)
 - **pull requests**: `-pr-{id}` (e.g., `myapp:pr-123`)
 - **tags**: `-tag-name` (e.g., `myapp:v1.0.0`)
@@ -64,7 +64,7 @@ This automatically creates the correct image tag based on your current branch or
 The action automatically determines the environment based on the current branch:
 
 - **main/master branches**: `production` environment with `-latest` image suffix
-- **develop branch**: `develop` environment with `-develop` image suffix  
+- **develop branch**: `develop` environment with `-develop` image suffix
 - **feature branches**: `{branch-name}` environment with `-{branch-name}` image suffix
 - **pull requests**: `pr-{id}` environment with `-pr-{id}` image suffix
 - **tags**: `production` environment with `-{tag-name}` image suffix
@@ -133,14 +133,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Initialize Quant Cloud
         uses: your-org/quant-cloud-init-action@v1
         id: init
         with:
           quant_organization: ${{ secrets.QUANT_ORGANIZATION }}
           quant_api_key: ${{ secrets.QUANT_API_KEY }}
-          
+
       - name: Build and push CLI image
         uses: docker/build-push-action@v5
         with:
@@ -151,7 +151,7 @@ jobs:
           tags: ${{ steps.init.outputs.stripped_endpoint }}/${{ secrets.QUANT_ORGANIZATION }}/${{ steps.init.outputs.quant_application }}:cli${{ steps.init.outputs.image_suffix }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          
+
       - name: Build and push PHP image
         uses: docker/build-push-action@v5
         with:
@@ -162,7 +162,7 @@ jobs:
           tags: ${{ steps.init.outputs.stripped_endpoint }}/${{ secrets.QUANT_ORGANIZATION }}/${{ steps.init.outputs.quant_application }}:php${{ steps.init.outputs.image_suffix }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          
+
       - name: Redeploy environment
         uses: quantcdn/quant-cloud-environment-state-action@v1
         with:
@@ -171,7 +171,7 @@ jobs:
           application: ${{ steps.init.outputs.quant_application }}
           environment: ${{ steps.init.outputs.environment_name }}
           action: redeploy
-          
+
       - name: Show deployment summary
         run: |
           echo "🎉 Deployment completed successfully."
@@ -208,4 +208,12 @@ npm test
 
 ## License
 
-This project is licensed under the MIT License. 
+This project is licensed under the MIT License.
+## Runner security requirement
+
+This action uses the runner's embedded Node 24, which must be 24.22.1 or later
+for CVE-2026-111497. Update self-hosted runner containers/binaries to apply the
+fix. A `setup-node` workflow step changes the job shell runtime, not the Node
+binary GitHub uses to execute actions. A pre-run check rejects vulnerable
+runner versions before action API calls. Use the current maintained action tag
+or its immutable release SHA; historical pinned releases do not update themselves.
